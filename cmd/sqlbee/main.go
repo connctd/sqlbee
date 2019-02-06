@@ -22,7 +22,7 @@ func main() {
 	opts := sting.NewOptions()
 
 	mutateOpts := Options{}
-	mutateOpts.DefaultInstance = "molten-mariner-162315:europe-west1:platform-sql-master"
+	mutateOpts.DefaultInstance = *instanceName
 	mutateOpts.DefaultCertVolume = *caConfigMapName
 	mutateOpts.DefaultSecretName = *secretName
 
