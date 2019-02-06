@@ -31,7 +31,7 @@ var (
 	annotationCaMap    = annotationBase + "caMap"
 
 	imageName    = "gcr.io/cloudsql-docker/gce-proxy"
-	imageTag     = "1.08"
+	imageTag     = "1.13"
 	defaultImage = imageName + ":" + imageTag
 
 	sqlProxyCmd = []string{
