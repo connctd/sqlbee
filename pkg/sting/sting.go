@@ -50,13 +50,6 @@ var (
 	Defaulter = runtime.ObjectDefaulter(RuntimeScheme)
 )
 
-var (
-	ignoredNamespaces = []string{
-		metav1.NamespaceSystem,
-		metav1.NamespacePublic,
-	}
-)
-
 var ignoredPatchPaths = []string{"/spec/template/metadata/creationTimestamp", "/status",
 	"/metadata/creationTimestamp"}
 
