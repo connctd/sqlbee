@@ -86,6 +86,13 @@ var (
 	}
 )
 
+var (
+	ignoredNamespaces = []string{
+		metav1.NamespaceSystem,
+		metav1.NamespacePublic,
+	}
+)
+
 type Options struct {
 	DefaultInstance   string
 	DefaultSecretName string
@@ -128,7 +135,7 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 		credVolumes := credentialsVolume.DeepCopy()
 		credVolumes.VolumeSource.Secret.SecretName = secretName
 		sqlProxyVolumes = append(sqlProxyVolumes, *credVolumes)
-		cmd = append(cmd, "credential_file=/credentials/credentials.json")
+		cmd = append(cmd, "-credential_file=/credentials/credentials.json")
 	}
 
 	caConfigName := sting.AnnotationValue(obj, annotationCaMap, opts.DefaultCertVolume)
@@ -139,7 +146,7 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 		sqlProxyVolumes = append(sqlProxyVolumes, *caVolume)
 	}
 
-	cmd = append(cmd, fmt.Sprintf("instances=%s=tcp:127.0.0.1:3306", instance))
+	cmd = append(cmd, fmt.Sprintf("-instances=%s=tcp:127.0.0.1:3306", instance))
 
 	sqlProxyContainer.Command = cmd
 }
@@ -148,11 +155,24 @@ func Mutate(opts Options) sting.MutateFunc {
 
 	return func(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 
+		reviewResponse := &v1beta1.AdmissionResponse{}
+
+		for _, namespace := range ignoredNamespaces {
+			if ar.Request.Namespace == namespace {
+				logrus.WithFields(logrus.Fields{
+					"requestUID": ar.Request.UID,
+					"resource":   ar.Request.Resource.String(),
+					"name":       ar.Request.Name,
+					"namespace":  ar.Request.Namespace,
+				}).Info("Mutation ignored because of the namespace")
+				reviewResponse.Allowed = true
+				return reviewResponse
+			}
+		}
+
 		proxyContainer := sqlProxyContainer.DeepCopy()
 		volumes := []corev1.Volume{}
 		volumes = append(volumes, sqlProxyVolumes...)
-
-		reviewResponse := &v1beta1.AdmissionResponse{}
 
 		raw := ar.Request.Object.Raw
 		var obj runtime.Object
@@ -163,6 +183,9 @@ func Mutate(opts Options) sting.MutateFunc {
 
 			pod := &corev1.Pod{}
 			if _, _, err := sting.Deserializer.Decode(raw, nil, pod); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"requestUID": ar.Request.UID,
+				}).Error("Faiedl to deserialize pod object")
 				return sting.ToAdmissionResponse(err)
 			}
 
@@ -170,26 +193,48 @@ func Mutate(opts Options) sting.MutateFunc {
 			podSpec = &pod.Spec
 			// Check if we are dealing with any deployment
 		} else if ar.Request.Resource.Resource == "deployments" {
+			logrus.Info("Mutating deployment")
 			deployment := &appsv1.Deployment{}
 			if _, _, err := sting.Deserializer.Decode(raw, nil, deployment); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"requestUID": ar.Request.UID,
+				}).Error("Faiedl to deserialize deployment object")
 				return sting.ToAdmissionResponse(err)
 			}
 			obj = deployment
 			podSpec = &deployment.Spec.Template.Spec
 		} else {
+			logrus.WithFields(logrus.Fields{
+				"requestUID": ar.Request.UID,
+				"resource":   ar.Request.Resource.String(),
+			}).Error("Received unknown resource")
 			return sting.ToAdmissionResponse(sting.WrongResourceError)
 		}
 
 		if opts.RequireAnnotation && !sting.AnnotationHasValue(obj, annotationInject, "true") {
+			logrus.WithFields(logrus.Fields{
+				"requestUID": ar.Request.UID,
+				"resource":   ar.Request.Resource.String(),
+			}).Info("Resource does not need mutation, allowed")
 			reviewResponse.Allowed = true
 			return reviewResponse
 		} else if !opts.RequireAnnotation && sting.AnnotationHasValue(obj, annotationInject, "false") {
+			logrus.WithFields(logrus.Fields{
+				"requestUID": ar.Request.UID,
+				"resource":   ar.Request.Resource.String(),
+			}).Info("Resource does not need mutation, allowed")
 			reviewResponse.Allowed = true
 			return reviewResponse
 		}
 
 		//Check if we have a valid cloud sql instance
 		if sting.AnnotationValue(obj, annotationInstance, opts.DefaultInstance) == "" {
+			logrus.WithFields(logrus.Fields{
+				"requestUID": ar.Request.UID,
+				"resource":   ar.Request.Resource.String(),
+				"name":       ar.Request.Name,
+				"namespace":  ar.Request.Namespace,
+			}).Error("Can't determine Cloud SQL instance, SQLBee is not correctly configured")
 			err := fmt.Errorf("Instance is not specified via defaults or via annotation %s", annotationInstance)
 			return sting.ToAdmissionResponse(err)
 		}
@@ -200,6 +245,12 @@ func Mutate(opts Options) sting.MutateFunc {
 		mutatePodSpec(volumes, proxyContainer, podSpec)
 		patchBytes, err := sting.CreatePatch(obj, raw)
 		if err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"requestUID": ar.Request.UID,
+				"resource":   ar.Request.Resource.String(),
+				"name":       ar.Request.Name,
+				"namespace":  ar.Request.Namespace,
+			}).Error("Failed to create JSON patch")
 			return sting.ToAdmissionResponse(err)
 		}
 
@@ -208,7 +259,12 @@ func Mutate(opts Options) sting.MutateFunc {
 			reviewResponse.PatchType = &pt
 			reviewResponse.Patch = patchBytes
 		}
-
+		logrus.WithFields(logrus.Fields{
+			"requestUID": ar.Request.UID,
+			"resource":   ar.Request.Resource.String(),
+			"name":       ar.Request.Name,
+			"namespace":  ar.Request.Namespace,
+		}).Info("Resource mutated, cloud-sql-proxy sidecar injected")
 		return reviewResponse
 	}
 }
