@@ -36,7 +36,7 @@ var (
 
 	credentialMount = corev1.VolumeMount{
 		MountPath: "/credentials",
-		Name:      "service-token-account",
+		Name:      "sql-service-token-account",
 	}
 
 	caCertMount = corev1.VolumeMount{
@@ -121,7 +121,7 @@ func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, po
 	return *podSpec
 }
 
-func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.Container, sqlProxyVolumes []corev1.Volume, opts Options) {
+func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.Container, sqlProxyVolumes *[]corev1.Volume, opts Options) {
 	image := sting.AnnotationValue(obj, annotationImage, defaultImage)
 	sqlProxyContainer.Image = image
 	cmd := []string{}
@@ -134,7 +134,7 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 		sqlProxyContainer.VolumeMounts = append(sqlProxyContainer.VolumeMounts, credentialMount)
 		credVolumes := credentialsVolume.DeepCopy()
 		credVolumes.VolumeSource.Secret.SecretName = secretName
-		sqlProxyVolumes = append(sqlProxyVolumes, *credVolumes)
+		*sqlProxyVolumes = append(*sqlProxyVolumes, *credVolumes)
 		cmd = append(cmd, "-credential_file=/credentials/credentials.json")
 	}
 
@@ -143,7 +143,7 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 		caVolume := caCertVolume.DeepCopy()
 		caVolume.VolumeSource.ConfigMap.Name = caConfigName
 		sqlProxyContainer.VolumeMounts = append(sqlProxyContainer.VolumeMounts, caCertMount)
-		sqlProxyVolumes = append(sqlProxyVolumes, *caVolume)
+		*sqlProxyVolumes = append(*sqlProxyVolumes, *caVolume)
 	}
 
 	cmd = append(cmd, fmt.Sprintf("-instances=%s=tcp:127.0.0.1:3306", instance))
@@ -171,7 +171,7 @@ func Mutate(opts Options) sting.MutateFunc {
 		}
 
 		proxyContainer := sqlProxyContainer.DeepCopy()
-		volumes := []corev1.Volume{}
+		volumes := make([]corev1.Volume, 0, 5)
 		volumes = append(volumes, sqlProxyVolumes...)
 
 		raw := ar.Request.Object.Raw
@@ -185,7 +185,7 @@ func Mutate(opts Options) sting.MutateFunc {
 			if _, _, err := sting.Deserializer.Decode(raw, nil, pod); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{
 					"requestUID": ar.Request.UID,
-				}).Error("Faiedl to deserialize pod object")
+				}).Error("Failed to deserialize pod object")
 				return sting.ToAdmissionResponse(err)
 			}
 
@@ -241,7 +241,7 @@ func Mutate(opts Options) sting.MutateFunc {
 
 		reviewResponse.Allowed = true
 
-		configureContainerAndVolumes(obj, proxyContainer, volumes, opts)
+		configureContainerAndVolumes(obj, proxyContainer, &volumes, opts)
 		mutatePodSpec(volumes, proxyContainer, podSpec)
 		patchBytes, err := sting.CreatePatch(obj, raw)
 		if err != nil {
@@ -258,6 +258,9 @@ func Mutate(opts Options) sting.MutateFunc {
 			pt := v1beta1.PatchTypeJSONPatch
 			reviewResponse.PatchType = &pt
 			reviewResponse.Patch = patchBytes
+			logrus.WithFields(logrus.Fields{
+				"patch": string(patchBytes),
+			}).Debug("Created patches")
 		}
 		logrus.WithFields(logrus.Fields{
 			"requestUID": ar.Request.UID,
