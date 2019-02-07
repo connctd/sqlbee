@@ -126,6 +126,10 @@ func New(opts *Options) (*InjectServer, error) {
 
 	pair, err := tls.LoadX509KeyPair(opts.CertFile, opts.KeyFile)
 	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"certPath": opts.CertFile,
+			"keyPath":  opts.KeyFile,
+		}).Error("Failed to load TLS X.509 keypair")
 		return nil, err
 	}
 	i.cert = &pair
@@ -134,10 +138,12 @@ func New(opts *Options) (*InjectServer, error) {
 	r.Use(validateContentType("application/json"))
 
 	if opts.Mutate != nil {
+		logrus.WithField("urlPath", "/api/v1beta/mutate").Info("Adding mutating admission endpoint")
 		r.Path("/api/v1beta/mutate").Methods(http.MethodPost).HandlerFunc(i.handleMutate)
 	}
 
 	if opts.IsAdmitted != nil {
+		logrus.WithField("urlPath", "/api/v1beta/admit").Info("Adding non mutating admission endpoint")
 		r.Path("/api/v1beta/admit").Methods(http.MethodPost).HandlerFunc(i.handleAdmission)
 	}
 
@@ -156,6 +162,9 @@ func New(opts *Options) (*InjectServer, error) {
 
 	certWatcher, err := fsnotify.NewWatcher()
 	if err := certWatcher.Watch(opts.CertFile); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"certPath": opts.CertFile,
+		}).Error("Failed to creat file watcher for certificate")
 		return nil, err
 	}
 
@@ -164,13 +173,20 @@ func New(opts *Options) (*InjectServer, error) {
 			select {
 			case ev := <-watcher.Event:
 				if ev.IsModify() || ev.IsCreate() {
+					logrus.WithFields(logrus.Fields{
+						"certPath": opts.CertFile,
+						"keyPath":  opts.KeyFile,
+					}).Info("Certificate has been updated reloading keypair")
 					pair, err := tls.LoadX509KeyPair(opts.CertFile, opts.KeyFile)
 					if err == nil {
 						i.certLock.Lock()
 						i.cert = &pair
 						i.certLock.Unlock()
 					} else {
-						// TODO Log this error
+						logrus.WithError(err).WithFields(logrus.Fields{
+							"certPath": opts.CertFile,
+							"keyPath":  opts.KeyFile,
+						}).Panic("Failed to reload keypair!")
 					}
 				}
 			}
@@ -180,7 +196,9 @@ func New(opts *Options) (*InjectServer, error) {
 	i.server = server
 
 	go func() {
-		// TODO handle and log possible errors
+		logrus.WithFields(logrus.Fields{
+			"listenAddr": opts.ListenAddr,
+		}).Info("HTTPS server listening")
 		if err := i.server.ListenAndServeTLS("", ""); err != nil {
 			logrus.WithError(err).Error("Failed to listen as TLS server")
 		}
@@ -190,6 +208,10 @@ func New(opts *Options) (*InjectServer, error) {
 }
 
 func (i *InjectServer) Close() error {
+	logrus.WithFields(logrus.Fields{
+		"timeOut":    "15s",
+		"listenAddr": i.server.Addr,
+	}).Info("Shutting down HTTPS server")
 	shutdownCtx, _ := context.WithTimeout(context.Background(), 15*time.Second)
 	i.server.Shutdown(shutdownCtx)
 	return nil
@@ -204,6 +226,11 @@ func (i *InjectServer) getCert(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 func readRequest(w http.ResponseWriter, r *http.Request) (*v1beta1.AdmissionReview, error) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"remoteAddr": r.RemoteAddr,
+			"requestUri": r.RequestURI,
+			"protocol":   r.Proto,
+		}).Error("Failed to read request body from client")
 		err := fmt.Errorf("Failed to read request body")
 		errorResponse(err, http.StatusBadRequest, nil, w)
 		return nil, fmt.Errorf("Failed to read request body")
@@ -211,6 +238,11 @@ func readRequest(w http.ResponseWriter, r *http.Request) (*v1beta1.AdmissionRevi
 
 	if len(body) == 0 {
 		err := fmt.Errorf("Request body is empty")
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"remoteAddr": r.RemoteAddr,
+			"requestUri": r.RequestURI,
+			"protocol":   r.Proto,
+		}).Error("Failed to read request body from client")
 		errorResponse(err, http.StatusBadRequest, nil, w)
 		return nil, err
 	}
@@ -219,6 +251,8 @@ func readRequest(w http.ResponseWriter, r *http.Request) (*v1beta1.AdmissionRevi
 	if err := json.Unmarshal(body, &ar); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"remoteAddr": r.RemoteAddr,
+			"requestUri": r.RequestURI,
+			"protocol":   r.Proto,
 			"body":       string(body),
 		}).Error("Failed to unmarshal request body")
 		errorResponse(err, http.StatusBadRequest, &ar, w)
@@ -230,11 +264,17 @@ func readRequest(w http.ResponseWriter, r *http.Request) (*v1beta1.AdmissionRevi
 func (i *InjectServer) handleMutate(w http.ResponseWriter, r *http.Request) {
 	if i.mutate == nil {
 		http.Error(w, "Internal error", http.StatusInternalServerError)
+		logrus.Panic("Mutate function not set and handleMuate called, this shouldn't happen!")
 		return
 	}
 
 	ar, err := readRequest(w, r)
 	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"remoteAddr": r.RemoteAddr,
+			"requestUri": r.RequestURI,
+			"protocol":   r.Proto,
+		}).Error("Failed to read request")
 		return
 	}
 
@@ -242,13 +282,31 @@ func (i *InjectServer) handleMutate(w http.ResponseWriter, r *http.Request) {
 	response := v1beta1.AdmissionReview{}
 
 	if i.needsMutate != nil && !i.needsMutate(ar) {
+		logrus.WithFields(logrus.Fields{
+			"name":         ar.Request.Name,
+			"namespace":    ar.Request.Namespace,
+			"groupVersion": ar.Request.Resource.String(),
+			"requestUID":   ar.Request.UID,
+		}).Info("This resource doesn't need mutation, allowing the request")
 		admissionResponse = &v1beta1.AdmissionResponse{}
 		admissionResponse.Allowed = true
 		admissionResponse.Result = &metav1.Status{Message: "This resource does not need mutation"}
 		response.Response = admissionResponse
 	} else {
+		logrus.WithFields(logrus.Fields{
+			"name":         ar.Request.Name,
+			"namespace":    ar.Request.Namespace,
+			"groupVersion": ar.Request.Resource.String(),
+			"requestUID":   ar.Request.UID,
+		}).Info("Mutating resource")
 		admissionResponse = i.mutate(ar)
 		if admissionResponse == nil {
+			logrus.WithFields(logrus.Fields{
+				"name":         ar.Request.Name,
+				"namespace":    ar.Request.Namespace,
+				"groupVersion": ar.Request.Resource.String(),
+				"requestUID":   ar.Request.UID,
+			}).Error("Admission response was nil, some error occured")
 			errorResponse(fmt.Errorf("Failed to generate admission response"), http.StatusInternalServerError, ar, w)
 			return
 		}
@@ -261,33 +319,56 @@ func (i *InjectServer) handleMutate(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"requestUID": ar.Request.UID,
+			"name":         ar.Request.Name,
+			"namespace":    ar.Request.Namespace,
+			"groupVersion": ar.Request.Resource.String(),
+			"requestUID":   ar.Request.UID,
 		}).Error("Failed to serialize admission response to JSON")
 	}
 }
 
 func (i *InjectServer) handleAdmission(w http.ResponseWriter, r *http.Request) {
 	if i.isAdmitted == nil {
+		logrus.Panic("isAdmitted function not set and handleAdmission called, this shouldn't happen!")
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 	}
 
 	ar, err := readRequest(w, r)
 	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"remoteAddr": r.RemoteAddr,
+			"requestUri": r.RequestURI,
+			"protocol":   r.Proto,
+		}).Error("Failed to read request")
 		return
 	}
 
 	admissionResponse, err := i.isAdmitted(ar)
 	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"remoteAddr":   r.RemoteAddr,
+			"requestUri":   r.RequestURI,
+			"protocol":     r.Proto,
+			"name":         ar.Request.Name,
+			"namespace":    ar.Request.Namespace,
+			"groupVersion": ar.Request.Resource.String(),
+			"requestUID":   ar.Request.UID,
+		}).Error("An error occured during admission decision")
 		errorResponse(err, http.StatusNotAcceptable, ar, w)
 		return
 	}
 	response := v1beta1.AdmissionReview{}
 	response.Response = admissionResponse
-	response.Response.UID = ar.Request.UID
+	if ar.Request != nil {
+		response.Response.UID = ar.Request.UID
+	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"requestUID": ar.Request.UID,
+			"requestUID":   ar.Request.UID,
+			"name":         ar.Request.Name,
+			"namespace":    ar.Request.Namespace,
+			"groupVersion": ar.Request.Resource.String(),
 		}).Error("Failed to serialize admission response to JSON")
 	}
 
@@ -302,6 +383,12 @@ func validateContentType(allowedTypes ...string) mux.MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			contentType := r.Header.Get("Content-Type")
 			if !allowed[contentType] {
+				logrus.WithFields(logrus.Fields{
+					"contentType": contentType,
+					"remoteAddr":  r.RemoteAddr,
+					"requestUri":  r.RequestURI,
+					"protocol":    r.Proto,
+				}).Error("Invalid content type received from client")
 				http.Error(w, "invalid Content-Type, want `application/json`", http.StatusUnsupportedMediaType)
 			} else {
 				next.ServeHTTP(w, r)
