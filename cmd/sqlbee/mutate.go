@@ -92,6 +92,9 @@ var (
 	}
 )
 
+var ignoredPatchPaths = []string{"/spec/template/metadata/creationTimestamp", "/status",
+	"/metadata/creationTimestamp"}
+
 type Options struct {
 	DefaultInstance   string
 	DefaultSecretName string
@@ -161,9 +164,11 @@ func createPatch(mutatedObj runtime.Object, objRaw []byte) ([]byte, error) {
 
 	if len(patch) > 0 {
 		// ignore creationTimestamp
-		for i, p := range patch {
-			if p.Path == "/metadata/creationTimestamp" {
-				patch = append(patch[:i], patch[i+1:]...)
+		for _, path := range ignoredPatchPaths {
+			for i, p := range patch {
+				if p.Path == path {
+					patch = append(patch[:i], patch[i+1:]...)
+				}
 			}
 		}
 		return stdjson.Marshal(patch)
@@ -195,7 +200,8 @@ func Mutate(opts Options) sting.MutateFunc {
 
 			obj = pod
 			podSpec = &pod.Spec
-		} else if ar.Request.Resource == deploymentResource || ar.Request.Resource == legacyDeploymentResource {
+			// Check if we are dealing with any deployment
+		} else if ar.Request.Resource.Resource == "deployments" {
 			deployment := &appsv1.Deployment{}
 			if _, _, err := sting.Deserializer.Decode(raw, nil, deployment); err != nil {
 				return sting.ToAdmissionResponse(err)
