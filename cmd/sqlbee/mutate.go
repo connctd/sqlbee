@@ -20,8 +20,9 @@ import (
 var (
 	serializer = json.NewSerializer(json.DefaultMetaFactory, sting.RuntimeScheme, sting.RuntimeScheme, false)
 
-	podResource        = metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	deploymentResource = metav1.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+	podResource              = metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+	deploymentResource       = metav1.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+	legacyDeploymentResource = metav1.GroupVersionResource{Group: "extensions", Version: "v1beta1", Resource: "deployments"}
 
 	annotationBase     = "sqlbee.connctd.io."
 	annotationInject   = annotationBase + "inject"
@@ -194,7 +195,7 @@ func Mutate(opts Options) sting.MutateFunc {
 
 			obj = pod
 			podSpec = &pod.Spec
-		} else if ar.Request.Resource == deploymentResource {
+		} else if ar.Request.Resource == deploymentResource || ar.Request.Resource == legacyDeploymentResource {
 			deployment := &appsv1.Deployment{}
 			if _, _, err := sting.Deserializer.Decode(raw, nil, deployment); err != nil {
 				return sting.ToAdmissionResponse(err)
