@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
-	stdjson "encoding/json"
 	"fmt"
 
-	"github.com/mattbaird/jsonpatch"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -92,9 +89,6 @@ var (
 	}
 )
 
-var ignoredPatchPaths = []string{"/spec/template/metadata/creationTimestamp", "/status",
-	"/metadata/creationTimestamp"}
-
 type Options struct {
 	DefaultInstance   string
 	DefaultSecretName string
@@ -152,30 +146,6 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 	sqlProxyContainer.Command = cmd
 }
 
-func createPatch(mutatedObj runtime.Object, objRaw []byte) ([]byte, error) {
-	mutatedRawBuf := &bytes.Buffer{}
-	if err := serializer.Encode(mutatedObj, mutatedRawBuf); err != nil {
-		return nil, err
-	}
-	patch, err := jsonpatch.CreatePatch(objRaw, mutatedRawBuf.Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	if len(patch) > 0 {
-		// ignore creationTimestamp
-		for _, path := range ignoredPatchPaths {
-			for i, p := range patch {
-				if p.Path == path {
-					patch = append(patch[:i], patch[i+1:]...)
-				}
-			}
-		}
-		return stdjson.Marshal(patch)
-	}
-	return nil, nil
-}
-
 func Mutate(opts Options) sting.MutateFunc {
 
 	return func(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
@@ -227,7 +197,7 @@ func Mutate(opts Options) sting.MutateFunc {
 
 		configureContainerAndVolumes(obj, proxyContainer, volumes, opts)
 		mutatePodSpec(volumes, proxyContainer, podSpec)
-		patchBytes, err := createPatch(obj, raw)
+		patchBytes, err := sting.CreatePatch(obj, raw)
 		if err != nil {
 			return sting.ToAdmissionResponse(err)
 		}

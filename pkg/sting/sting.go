@@ -1,6 +1,7 @@
 package sting
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/howeyc/fsnotify"
+	"github.com/mattbaird/jsonpatch"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/api/admission/v1beta1"
@@ -28,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	k8sjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/kubernetes/pkg/apis/core/v1"
 )
 
@@ -39,6 +42,7 @@ var (
 	RuntimeScheme = runtime.NewScheme()
 	Codecs        = serializer.NewCodecFactory(RuntimeScheme)
 	Deserializer  = Codecs.UniversalDeserializer()
+	marshaler     = k8sjson.NewSerializer(k8sjson.DefaultMetaFactory, RuntimeScheme, RuntimeScheme, false)
 
 	// (https://github.com/kubernetes/kubernetes/issues/57982)
 	Defaulter = runtime.ObjectDefaulter(RuntimeScheme)
@@ -51,11 +55,8 @@ var (
 	}
 )
 
-type patchOperation struct {
-	Op    string      `json:"op"`
-	Path  string      `json:"path"`
-	Value interface{} `json:"value,omitempty"`
-}
+var ignoredPatchPaths = []string{"/spec/template/metadata/creationTimestamp", "/status",
+	"/metadata/creationTimestamp"}
 
 func init() {
 	_ = corev1.AddToScheme(RuntimeScheme)
@@ -453,4 +454,28 @@ func AnnotationValue(obj runtime.Object, key string, def ...string) string {
 
 func ToAdmissionResponse(err error) *v1beta1.AdmissionResponse {
 	return &v1beta1.AdmissionResponse{Result: &metav1.Status{Message: err.Error()}}
+}
+
+func CreatePatch(mutatedObj runtime.Object, objRaw []byte) ([]byte, error) {
+	mutatedRawBuf := &bytes.Buffer{}
+	if err := marshaler.Encode(mutatedObj, mutatedRawBuf); err != nil {
+		return nil, err
+	}
+	patch, err := jsonpatch.CreatePatch(objRaw, mutatedRawBuf.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	if len(patch) > 0 {
+		// ignore creationTimestamp
+		for _, path := range ignoredPatchPaths {
+			for i, p := range patch {
+				if p.Path == path {
+					patch = append(patch[:i], patch[i+1:]...)
+				}
+			}
+		}
+		return json.Marshal(patch)
+	}
+	return nil, nil
 }
