@@ -90,6 +90,7 @@ type Options struct {
 	DefaultInstance   string
 	DefaultSecretName string
 	DefaultCertVolume string
+	RequireAnnotation bool
 }
 
 func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, podSpec *corev1.PodSpec) corev1.PodSpec {
@@ -179,7 +180,10 @@ func Mutate(opts Options) sting.MutateFunc {
 			return sting.ToAdmissionResponse(sting.WrongResourceError)
 		}
 
-		if !sting.AnnotationHasValue(obj, annotationInject, "true") {
+		if opts.RequireAnnotation && !sting.AnnotationHasValue(obj, annotationInject, "true") {
+			reviewResponse.Allowed = true
+			return reviewResponse
+		} else if !opts.RequireAnnotation && sting.AnnotationHasValue(obj, annotationInject, "false") {
 			reviewResponse.Allowed = true
 			return reviewResponse
 		}
