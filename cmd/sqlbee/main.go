@@ -21,6 +21,7 @@ var (
 func main() {
 	flag.Parse()
 
+	// Set the log level
 	lvl, err := logrus.ParseLevel(*logLevel)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
@@ -36,8 +37,10 @@ func main() {
 		"requireAnnotation": *requireAnnotation,
 	}).Info("Starting SQLBee")
 
+	// Configure our InjectServer
 	opts := sting.NewOptions()
 
+	// Configure our MutateFunc with the received parameters
 	mutateOpts := Options{}
 	mutateOpts.DefaultInstance = *instanceName
 	mutateOpts.DefaultCertVolume = *caConfigMapName

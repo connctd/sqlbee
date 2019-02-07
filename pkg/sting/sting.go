@@ -37,9 +37,12 @@ import (
 var Version = "unset"
 
 var (
+	// WrongResourceError can be used to indicate that this webhook doesn't support this resource-
+	// This might happen due to wrong configuration etc.
 	WrongResourceError = errors.New("Wrong resource type")
 )
 
+// Schemas, codecs etc. so serialize and deserialize datatypes for Kubernetes
 var (
 	RuntimeScheme = runtime.NewScheme()
 	Codecs        = serializer.NewCodecFactory(RuntimeScheme)
@@ -50,6 +53,8 @@ var (
 	Defaulter = runtime.ObjectDefaulter(RuntimeScheme)
 )
 
+// There are some things, which might get added by a patch, which we don't care about or are
+// generated/overwritten by the kubernetes master anyway
 var ignoredPatchPaths = []string{"/spec/template/metadata/creationTimestamp", "/status",
 	"/metadata/creationTimestamp"}
 
@@ -64,10 +69,18 @@ func init() {
 	_ = v1.AddToScheme(RuntimeScheme)
 }
 
+// MutateFunc is the definition for functions doing the mutation of a resource
 type MutateFunc func(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
+
+// NeedsMutationFunc can be used to run more complex checks before MutateFunc is called
 type NeedsMutationFunc func(ar *v1beta1.AdmissionReview) bool
+
+// IsAdmittedFunc is used for admitting only webhooks to determine wether a resource can be admitted
 type IsAdmittedFunc func(ar *v1beta1.AdmissionReview) (*v1beta1.AdmissionResponse, error)
 
+// InjectServer is an opinionated implementation of a service running within kubernetes as admission
+// webhook. It provides a HTTPS secured endpoint for admission/mutation and a HTTP endpoint for
+// readiness and liveness checks
 type InjectServer struct {
 	server      *http.Server
 	cert        *tls.Certificate
@@ -79,22 +92,34 @@ type InjectServer struct {
 	isAdmitted  IsAdmittedFunc
 }
 
+// Options are used to configure the InjectServer
 type Options struct {
-	ListenAddr  string
-	Mutate      MutateFunc
+	// ListenAddr is used for the admission endpoint. Default is :443
+	ListenAddr string
+	// The function implementation to be used when running mutations.
+	Mutate MutateFunc
+	// Optional function to be used to decide whether a mutation is necessary or not
 	NeedsMutate NeedsMutationFunc
-	IsAdmitted  IsAdmittedFunc
+	// IsAdmitted can be set to enable admission checks
+	IsAdmitted IsAdmittedFunc
 
+	// These are parameters for the HTTP(S) server, they are optional and default to sane values
 	ReadTimeout       time.Duration
 	IdleTimeout       time.Duration
 	ReadHeaderTimeout time.Duration
 	WriteTimeout      time.Duration
 
+	// Path to the server X.509 certificate
 	CertFile string
-	KeyFile  string
-	CaFile   string
+	// Path to the server private key
+	KeyFile string
+	// Unused so far. Will be required for support of TLS authenticated clients
+	CaFile string
 }
 
+// Main is a simple helper method which takes an io.Closer and blocks until either
+// SIGTERM oder SIGINT are received and the calls Close() in the io.Closer() and exits with
+// (0)
 func Main(closeable io.Closer) {
 	var gracefulStop = make(chan os.Signal)
 	signal.Notify(gracefulStop, syscall.SIGTERM)
@@ -107,6 +132,8 @@ func Main(closeable io.Closer) {
 	os.Exit(0)
 }
 
+// NewOptions creates a new instance of an Options struct with sane values set. Only
+// Mutate, NeedsMutate or IsAdmitted need to set now.
 func NewOptions() *Options {
 	return &Options{
 		ListenAddr:        ":443",
@@ -117,6 +144,8 @@ func NewOptions() *Options {
 	}
 }
 
+// New creates and starts a new InjectServer. InjectServer implements io.Closer
+// so it can be used together with the helper function Main
 func New(opts *Options) (*InjectServer, error) {
 	i := &InjectServer{
 		mutate:      opts.Mutate,
@@ -227,6 +256,7 @@ func New(opts *Options) (*InjectServer, error) {
 	return i, nil
 }
 
+// Close is necessary to implement io.Closer interface
 func (i *InjectServer) Close() error {
 	logrus.WithFields(logrus.Fields{
 		"timeOut":    "15s",
@@ -455,12 +485,16 @@ func getAnnotations(obj runtime.Object) map[string]string {
 	return annotations
 }
 
+// AnnotationHasValue checks whether an API object has annotations and these annotations
+// contain the specified key with the specified value
 func AnnotationHasValue(obj runtime.Object, key, val string) bool {
 	annotations := getAnnotations(obj)
 	v, e := annotations[key]
 	return e && v == val
 }
 
+// AnnotationValue retrieves the string representation of the value of an annotation specified
+// by key. In case the annotation is not found a default value can be specified as the last parameter
 func AnnotationValue(obj runtime.Object, key string, def ...string) string {
 	annotations := getAnnotations(obj)
 	if len(def) == 0 {
@@ -473,10 +507,14 @@ func AnnotationValue(obj runtime.Object, key string, def ...string) string {
 	}
 }
 
+// ToAdmissionResponse is a simple method to create a v1beta1.AdmissionResponse struct with an
+// error message set
 func ToAdmissionResponse(err error) *v1beta1.AdmissionResponse {
 	return &v1beta1.AdmissionResponse{Result: &metav1.Status{Message: err.Error()}}
 }
 
+// CreatePatch creates a JSON patch from the given mutatedObj and its JSON serialized
+// original structure.
 func CreatePatch(mutatedObj runtime.Object, objRaw []byte) ([]byte, error) {
 	mutatedRawBuf := &bytes.Buffer{}
 	if err := Marshaler.Encode(mutatedObj, mutatedRawBuf); err != nil {

@@ -18,6 +18,7 @@ var (
 	deploymentResource       = metav1.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 	legacyDeploymentResource = metav1.GroupVersionResource{Group: "extensions", Version: "v1beta1", Resource: "deployments"}
 
+	// Annotations which are checked and used to influence the injection
 	annotationBase     = "sqlbee.connctd.io."
 	annotationInject   = annotationBase + "inject"
 	annotationImage    = annotationBase + "image"
@@ -25,25 +26,32 @@ var (
 	annotationSecret   = annotationBase + "secret"
 	annotationCaMap    = annotationBase + "caMap"
 
+	// default image to be used if none is specified
 	imageName    = "gcr.io/cloudsql-docker/gce-proxy"
 	imageTag     = "1.13"
 	defaultImage = imageName + ":" + imageTag
 
+	// Command of the sql proxy container. Is extended througout the injection process with additional
+	// parameters depending on the configuration and annotations
 	sqlProxyCmd = []string{
 		"/cloud_sql_proxy",
 		"-dir=/cloudsql",
 	}
 
+	// Predefined definition to mount GCP credentials
 	credentialMount = corev1.VolumeMount{
 		MountPath: "/credentials",
 		Name:      "sql-service-token-account",
 	}
 
+	// Predefined definition to mount different root certificates
 	caCertMount = corev1.VolumeMount{
 		MountPath: "/etc/ssl/certs",
 		Name:      "ca-certificates",
 	}
 
+	// barebones container specification for the cloud sql proxy sidecar. Is extended throughout the
+	// injection process
 	sqlProxyContainer = corev1.Container{
 		Image:   defaultImage,
 		Command: sqlProxyCmd,
@@ -56,6 +64,7 @@ var (
 		Name: "cloud-sql-proxy",
 	}
 
+	// definition of a volume mount for GCP credentials. Will be modified during the injection process
 	credentialsVolume = corev1.Volume{
 		Name: "sql-service-token-account",
 		VolumeSource: corev1.VolumeSource{
@@ -65,6 +74,7 @@ var (
 		},
 	}
 
+	// definition of a volume to mount custom ca certificates
 	caCertVolume = corev1.Volume{
 		Name: "sql-ca-certificates",
 		VolumeSource: corev1.VolumeSource{
@@ -76,6 +86,7 @@ var (
 		},
 	}
 
+	// the cloud sql proxy will always have this single volume to write temporary data to it
 	sqlProxyVolumes = []corev1.Volume{
 		corev1.Volume{
 			Name: "cloudsql",
@@ -87,19 +98,26 @@ var (
 )
 
 var (
+	// injection requests for these namespaces are ignored
 	ignoredNamespaces = []string{
 		metav1.NamespaceSystem,
 		metav1.NamespacePublic,
 	}
 )
 
+// Options describe the possible injection options
 type Options struct {
-	DefaultInstance   string
+	// The cloud sql instance(s) the cloud sql proxy will forward connections to
+	DefaultInstance string
+	// The secret containing the cloud sql credentials if not specified by annotations
 	DefaultSecretName string
+	// The config map containing the root certificates, if necessary
 	DefaultCertVolume string
+	// Whether injection should only happen if the inject annotation is present and set to true
 	RequireAnnotation bool
 }
 
+// mutates a corev1.PodSpec to contain a cloud sql proxy sidecar and the necessary volume mounts and volumes
 func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, podSpec *corev1.PodSpec) corev1.PodSpec {
 
 	for i, container := range podSpec.Containers {
@@ -121,6 +139,7 @@ func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, po
 	return *podSpec
 }
 
+// configures the sidecar container spec and the required volumes for the podSpec based on the provided options
 func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.Container, sqlProxyVolumes *[]corev1.Volume, opts Options) {
 	image := sting.AnnotationValue(obj, annotationImage, defaultImage)
 	sqlProxyContainer.Image = image
@@ -151,12 +170,14 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 	sqlProxyContainer.Command = cmd
 }
 
+// Mutate returns a sting.MutateFunc parametrized with the specified Options
 func Mutate(opts Options) sting.MutateFunc {
 
 	return func(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 
 		reviewResponse := &v1beta1.AdmissionResponse{}
 
+		// Ignore certain namespaces
 		for _, namespace := range ignoredNamespaces {
 			if ar.Request.Namespace == namespace {
 				logrus.WithFields(logrus.Fields{
@@ -170,6 +191,8 @@ func Mutate(opts Options) sting.MutateFunc {
 			}
 		}
 
+		// Create a deep copy of the sidecar container and the volumes so multiple
+		// requests don't try to manipulate the same objects in memory
 		proxyContainer := sqlProxyContainer.DeepCopy()
 		volumes := make([]corev1.Volume, 0, 5)
 		volumes = append(volumes, sqlProxyVolumes...)
@@ -182,6 +205,7 @@ func Mutate(opts Options) sting.MutateFunc {
 			logrus.Info("Mutating pod resource")
 
 			pod := &corev1.Pod{}
+			// Deserialize a pod object
 			if _, _, err := sting.Deserializer.Decode(raw, nil, pod); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{
 					"requestUID": ar.Request.UID,
@@ -204,6 +228,7 @@ func Mutate(opts Options) sting.MutateFunc {
 			obj = deployment
 			podSpec = &deployment.Spec.Template.Spec
 		} else {
+			// In case we misconfigure the admission webhook return an error
 			logrus.WithFields(logrus.Fields{
 				"requestUID": ar.Request.UID,
 				"resource":   ar.Request.Resource.String(),
@@ -211,6 +236,9 @@ func Mutate(opts Options) sting.MutateFunc {
 			return sting.ToAdmissionResponse(sting.WrongResourceError)
 		}
 
+		// Check whether we should do the mutation. If the inject annotation is true
+		// we always inject. If it is false we never muate. If it is missing it depends
+		// whether opts.RequireAnnotation is true or not.
 		if opts.RequireAnnotation && !sting.AnnotationHasValue(obj, annotationInject, "true") {
 			logrus.WithFields(logrus.Fields{
 				"requestUID": ar.Request.UID,
@@ -239,10 +267,16 @@ func Mutate(opts Options) sting.MutateFunc {
 			return sting.ToAdmissionResponse(err)
 		}
 
+		// After here we should have all necessary information and be sure that we want to do
+		// the mutation
 		reviewResponse.Allowed = true
 
+		// Configure our copies of the container spec and the volumes based on the annotations
+		// and configuration
 		configureContainerAndVolumes(obj, proxyContainer, &volumes, opts)
+		// mutate the pod with our sidecar and volumes
 		mutatePodSpec(volumes, proxyContainer, podSpec)
+		// create the actual patch
 		patchBytes, err := sting.CreatePatch(obj, raw)
 		if err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
@@ -254,6 +288,7 @@ func Mutate(opts Options) sting.MutateFunc {
 			return sting.ToAdmissionResponse(err)
 		}
 
+		// Only set the patch type if we have actually something to patch
 		if len(patchBytes) > 0 {
 			pt := v1beta1.PatchTypeJSONPatch
 			reviewResponse.PatchType = &pt

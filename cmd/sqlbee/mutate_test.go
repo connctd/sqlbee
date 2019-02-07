@@ -270,6 +270,7 @@ func TestMutation(t *testing.T) {
 		mutateOpts := Options{}
 		mutateOpts.DefaultInstance = "my-gcp-project-42:europe-west1:sql-master"
 		mutateOpts.DefaultSecretName = "cloud-sql-credentials"
+		mutateOpts.RequireAnnotation = true
 		mut := Mutate(mutateOpts)
 
 		ar := mut(data.review)
