@@ -1,3 +1,6 @@
 cmd/sqlbee/sqlbee
 sqlbee
-deployment
+deployment/sql-secret.yaml
+deployment/ca.crt
+deployment/our-deployment.yaml
+deployment/test-deployment.yaml

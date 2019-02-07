@@ -1,0 +1,87 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: sqlbee
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        svc: sqlbee
+        channel: stable
+        app: sqlbee
+    spec:
+      containers:
+      - name: sqlbee
+        image: connctd/sqlbee:43584f7-dirty
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 1
+          periodSeconds: 5
+        ports:
+        - containerPort: 443
+        args:
+         #- -annotationRequired
+        - "-cert=/certs/cert.pem"
+        - "-key=/certs/key.pem"
+        - "-instance=drunken-driver-42:europe-west1:sql-master"
+        - "-secret=cloud-sql-proxy-credentials"
+        - "-loglevel=debug"
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: /certs
+          readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: sqlbee-webhook-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlbee-svc
+  labels:
+    app: sqlbee
+spec:
+  ports:
+  - port: 443
+    targetPort: 443
+  selector:
+    app: sqlbee
+    svc: sqlbee
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: sqlbee-mutating-cfg
+  labels:
+    app: sqlbee-mutating-example
+webhooks:
+  - name: sqlbee-svc.kube-system.svc
+    clientConfig:
+      service:
+        name: sqlbee-svc
+        namespace: kube-system
+        path: "/api/v1beta/mutate"
+      caBundle: <CA-BUNDLE>
+    rules:
+      - operations: [ "CREATE" ]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+    #namespaceSelector:
+    #  matchLabels:
+    #    sqlbee: enabled
