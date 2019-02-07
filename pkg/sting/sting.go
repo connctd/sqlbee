@@ -34,6 +34,8 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core/v1"
 )
 
+var Version = "unset"
+
 var (
 	WrongResourceError = errors.New("Wrong resource type")
 )
@@ -74,9 +76,10 @@ type NeedsMutationFunc func(ar *v1beta1.AdmissionReview) bool
 type IsAdmittedFunc func(ar *v1beta1.AdmissionReview) (*v1beta1.AdmissionResponse, error)
 
 type InjectServer struct {
-	server   *http.Server
-	cert     *tls.Certificate
-	certLock *sync.Mutex
+	server      *http.Server
+	cert        *tls.Certificate
+	certLock    *sync.Mutex
+	adminServer *http.Server
 
 	mutate      MutateFunc
 	needsMutate NeedsMutationFunc
@@ -152,7 +155,10 @@ func New(opts *Options) (*InjectServer, error) {
 		r.Path("/api/v1beta/admit").Methods(http.MethodPost).HandlerFunc(i.handleAdmission)
 	}
 
-	server := &http.Server{
+	ar := mux.NewRouter()
+	ar.Path("/health").Methods(http.MethodGet).HandlerFunc(i.healtHandler)
+
+	i.server = &http.Server{
 		Addr:              opts.ListenAddr,
 		Handler:           r,
 		ReadTimeout:       opts.ReadTimeout,
@@ -163,6 +169,15 @@ func New(opts *Options) (*InjectServer, error) {
 			GetCertificate: i.getCert,
 		},
 		// TODO k8s compatible TLS config
+	}
+
+	i.adminServer = &http.Server{
+		Addr:              ":8080",
+		Handler:           ar,
+		ReadTimeout:       opts.ReadTimeout,
+		IdleTimeout:       opts.IdleTimeout,
+		ReadHeaderTimeout: opts.ReadHeaderTimeout,
+		WriteTimeout:      opts.WriteTimeout,
 	}
 
 	certWatcher, err := fsnotify.NewWatcher()
@@ -198,14 +213,21 @@ func New(opts *Options) (*InjectServer, error) {
 		}
 	}(certWatcher, opts)
 
-	i.server = server
-
 	go func() {
 		logrus.WithFields(logrus.Fields{
 			"listenAddr": opts.ListenAddr,
 		}).Info("HTTPS server listening")
 		if err := i.server.ListenAndServeTLS("", ""); err != nil {
 			logrus.WithError(err).Error("Failed to listen as TLS server")
+		}
+	}()
+
+	go func() {
+		logrus.WithFields(logrus.Fields{
+			"listenAddr": i.adminServer.Addr,
+		}).Info("Liveness and readiness HTTP server listening")
+		if err := i.adminServer.ListenAndServe(); err != nil {
+			logrus.WithError(err).Error("Liveness and readiness HTTP server failed to listen")
 		}
 	}()
 
@@ -218,7 +240,9 @@ func (i *InjectServer) Close() error {
 		"listenAddr": i.server.Addr,
 	}).Info("Shutting down HTTPS server")
 	shutdownCtx, _ := context.WithTimeout(context.Background(), 15*time.Second)
-	i.server.Shutdown(shutdownCtx)
+	go i.server.Shutdown(shutdownCtx)
+	go i.adminServer.Shutdown(shutdownCtx)
+	<-shutdownCtx.Done()
 	return nil
 }
 
@@ -226,6 +250,10 @@ func (i *InjectServer) getCert(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 	i.certLock.Lock()
 	defer i.certLock.Unlock()
 	return i.cert, nil
+}
+
+func (i *InjectServer) healtHandler(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func readRequest(w http.ResponseWriter, r *http.Request) (*v1beta1.AdmissionReview, error) {
