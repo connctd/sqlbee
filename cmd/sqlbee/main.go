@@ -15,6 +15,7 @@ var (
 	secretName        = flag.String("secret", "", "Optional secret to use for credentials. Needs to contain a valid 'credentials.json' key")
 	caConfigMapName   = flag.String("ca-map", "", "Optional name of a config map containing root certs")
 	requireAnnotation = flag.Bool("annotationRequired", false, "If set, the inject annotation is required to inject the object")
+	logLevel          = flag.String("loglevel", "info", "LogLevel")
 )
 
 func main() {
@@ -22,6 +23,15 @@ func main() {
 		"version": sting.Version,
 	}).Info("Starting SQLBee")
 	flag.Parse()
+
+	lvl, err := logrus.ParseLevel(*logLevel)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"specifiedLevel": *logLevel,
+		}).Warn("Specified log level invalid, falling back to info")
+		lvl = logrus.InfoLevel
+	}
+	logrus.SetLevel(lvl)
 
 	opts := sting.NewOptions()
 
