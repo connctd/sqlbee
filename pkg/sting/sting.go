@@ -22,6 +22,8 @@ import (
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
+	appsv1beta1 "k8s.io/api/apps/v1beta1"
+	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -58,6 +60,8 @@ type patchOperation struct {
 func init() {
 	_ = corev1.AddToScheme(RuntimeScheme)
 	_ = appsv1.AddToScheme(RuntimeScheme)
+	_ = appsv1beta1.AddToScheme(RuntimeScheme)
+	_ = appsv1beta2.AddToScheme(RuntimeScheme)
 	_ = admissionregistrationv1beta1.AddToScheme(RuntimeScheme)
 	// defaulting with webhooks:
 	// https://github.com/kubernetes/kubernetes/issues/57982
