@@ -19,9 +19,6 @@ var (
 )
 
 func main() {
-	logrus.WithFields(logrus.Fields{
-		"version": sting.Version,
-	}).Info("Starting SQLBee")
 	flag.Parse()
 
 	lvl, err := logrus.ParseLevel(*logLevel)
@@ -32,6 +29,12 @@ func main() {
 		lvl = logrus.InfoLevel
 	}
 	logrus.SetLevel(lvl)
+	logrus.WithFields(logrus.Fields{
+		"version":           sting.Version,
+		"logLevel":          lvl.String(),
+		"sqlInstance":       *instanceName,
+		"requireAnnotation": *requireAnnotation,
+	}).Info("Starting SQLBee")
 
 	opts := sting.NewOptions()
 
