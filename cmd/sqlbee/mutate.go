@@ -5,7 +5,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,9 +13,7 @@ import (
 )
 
 var (
-	podResource              = metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	deploymentResource       = metav1.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
-	legacyDeploymentResource = metav1.GroupVersionResource{Group: "extensions", Version: "v1beta1", Resource: "deployments"}
+	podResource = metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 
 	// Annotations which are checked and used to influence the injection
 	annotationBase     = "sqlbee.connctd.io."
@@ -197,44 +194,31 @@ func Mutate(opts Options) sting.MutateFunc {
 		volumes := make([]corev1.Volume, 0, 5)
 		volumes = append(volumes, sqlProxyVolumes...)
 
-		raw := ar.Request.Object.Raw
-		var obj runtime.Object
-		var podSpec *corev1.PodSpec
-
-		if ar.Request.Resource == podResource {
-			logrus.Info("Mutating pod resource")
-
-			pod := &corev1.Pod{}
-			// Deserialize a pod object
-			if _, _, err := sting.Deserializer.Decode(raw, nil, pod); err != nil {
-				logrus.WithError(err).WithFields(logrus.Fields{
-					"requestUID": ar.Request.UID,
-				}).Error("Failed to deserialize pod object")
-				return sting.ToAdmissionResponse(err)
-			}
-
-			obj = pod
-			podSpec = &pod.Spec
-			// Check if we are dealing with any deployment
-		} else if ar.Request.Resource.Resource == "deployments" {
-			logrus.Info("Mutating deployment")
-			deployment := &appsv1.Deployment{}
-			if _, _, err := sting.Deserializer.Decode(raw, nil, deployment); err != nil {
-				logrus.WithError(err).WithFields(logrus.Fields{
-					"requestUID": ar.Request.UID,
-				}).Error("Faiedl to deserialize deployment object")
-				return sting.ToAdmissionResponse(err)
-			}
-			obj = deployment
-			podSpec = &deployment.Spec.Template.Spec
-		} else {
-			// In case we misconfigure the admission webhook return an error
+		if ar.Request.Resource != podResource {
 			logrus.WithFields(logrus.Fields{
 				"requestUID": ar.Request.UID,
 				"resource":   ar.Request.Resource.String(),
 			}).Error("Received unknown resource")
 			return sting.ToAdmissionResponse(sting.WrongResourceError)
 		}
+
+		raw := ar.Request.Object.Raw
+		var obj runtime.Object
+		var podSpec *corev1.PodSpec
+
+		logrus.Info("Mutating pod resource")
+
+		pod := &corev1.Pod{}
+		// Deserialize a pod object
+		if _, _, err := sting.Deserializer.Decode(raw, nil, pod); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"requestUID": ar.Request.UID,
+			}).Error("Failed to deserialize pod object")
+			return sting.ToAdmissionResponse(err)
+		}
+
+		obj = pod
+		podSpec = &pod.Spec
 
 		// Check whether we should do the mutation. If the inject annotation is true
 		// we always inject. If it is false we never muate. If it is missing it depends
