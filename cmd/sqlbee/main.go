@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/connctd/sqlbee/sting"
+	"github.com/connctd/sqlbee/pkg/sting"
 )
 
 var (
