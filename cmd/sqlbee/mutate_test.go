@@ -1,11 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/mattbaird/jsonpatch"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -275,9 +279,29 @@ func TestMutation(t *testing.T) {
 		if data.allowed {
 			assert.Equal(t, v1beta1.PatchTypeJSONPatch, *ar.PatchType)
 			assert.NotEmpty(t, ar.Patch)
-			// FIXME This string comparison might not be really exact, we need a more elegant way
-			assert.Equal(t, data.expectedPatches, string(ar.Patch))
+
+			equal, err := AreEqualPatches(data.expectedPatches, string(ar.Patch))
+			require.NoError(t, err)
+			assert.True(t, equal, "Patches differ from expected patches.\nExpected:\n%s\nActual:\n%s\n", data.expectedPatches, string(ar.Patch))
+		} else {
+			assert.Empty(t, ar.Patch)
 		}
 	}
+}
 
+func AreEqualPatches(s1, s2 string) (bool, error) {
+	var o1 []jsonpatch.JsonPatchOperation
+	var o2 []jsonpatch.JsonPatchOperation
+
+	var err error
+	err = json.Unmarshal([]byte(s1), &o1)
+	if err != nil {
+		return false, fmt.Errorf("Error mashalling string 1 :: %s", err.Error())
+	}
+	err = json.Unmarshal([]byte(s2), &o2)
+	if err != nil {
+		return false, fmt.Errorf("Error mashalling string 2 :: %s", err.Error())
+	}
+
+	return reflect.DeepEqual(o1, o2), nil
 }
