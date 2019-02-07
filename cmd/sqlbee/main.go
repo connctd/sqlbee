@@ -18,6 +18,9 @@ var (
 )
 
 func main() {
+	logrus.WithFields(logrus.Fields{
+		"version": sting.Version,
+	}).Info("Starting SQLBee")
 	flag.Parse()
 
 	opts := sting.NewOptions()
