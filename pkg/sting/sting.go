@@ -42,7 +42,7 @@ var (
 	RuntimeScheme = runtime.NewScheme()
 	Codecs        = serializer.NewCodecFactory(RuntimeScheme)
 	Deserializer  = Codecs.UniversalDeserializer()
-	marshaler     = k8sjson.NewSerializer(k8sjson.DefaultMetaFactory, RuntimeScheme, RuntimeScheme, false)
+	Marshaler     = k8sjson.NewSerializer(k8sjson.DefaultMetaFactory, RuntimeScheme, RuntimeScheme, false)
 
 	// (https://github.com/kubernetes/kubernetes/issues/57982)
 	Defaulter = runtime.ObjectDefaulter(RuntimeScheme)
@@ -458,7 +458,7 @@ func ToAdmissionResponse(err error) *v1beta1.AdmissionResponse {
 
 func CreatePatch(mutatedObj runtime.Object, objRaw []byte) ([]byte, error) {
 	mutatedRawBuf := &bytes.Buffer{}
-	if err := marshaler.Encode(mutatedObj, mutatedRawBuf); err != nil {
+	if err := Marshaler.Encode(mutatedObj, mutatedRawBuf); err != nil {
 		return nil, err
 	}
 	patch, err := jsonpatch.CreatePatch(objRaw, mutatedRawBuf.Bytes())

@@ -9,14 +9,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 
 	"github.com/connctd/sqlbee/pkg/sting"
 )
 
 var (
-	serializer = json.NewSerializer(json.DefaultMetaFactory, sting.RuntimeScheme, sting.RuntimeScheme, false)
-
 	podResource              = metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 	deploymentResource       = metav1.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 	legacyDeploymentResource = metav1.GroupVersionResource{Group: "extensions", Version: "v1beta1", Resource: "deployments"}
