@@ -1,0 +1,12 @@
+vendor
+cmd
+pkg
+deployment
+.git
+Dockerfile
+.DS_Store
+.gitignore
+README.md
+go.mod
+go.sum
+Makefile
