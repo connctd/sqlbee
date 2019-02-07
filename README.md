@@ -1,9 +1,26 @@
 # SQLBee
 
-sqlbee pollinates your unsuspecting pods and deployments with cloud sql proxy sidecars
-so your services can easily connect to your cloud sql instance
+SQLBee pollinates your unsuspecting pods with cloud sql proxy sidecars
+so your services can easily connect to your cloud sql instance.
+When using [GCP Cloud SQL](https://cloud.google.com/sql/docs/) it is recommended to use
+[cloudsql-proxy](https://github.com/GoogleCloudPlatform/cloudsql-proxy) as a sidecar in your pods.
+Of course you can add this sidecar manually to all your pods requiting database access, but this
+is a tedious and possibly error prone (outdated images, typos etc.) process. SQLBee simply injects
+the same sidecar into all your pods. In case you some of your pods are little different than others
+you can customize the injection via annotations.
 
 ## Usage
+
+Deploy SQLBee (docker.io/connctd/sqlbee) as a mutating admission webhook 
+(see https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/).
+In the deployment folder an example configuration is provided. You will need have secret with
+a credentials.json with permissions for Cloud SQL to be used by the sidecar. Other authentication
+aren't currently supported You can either use the same secret everywhere or customize it per pod
+via annotations.
+
+Depending on whether you set the `annotationRequired` parameter you either need to add the annotation
+`sqlbee.connctd.io.inject: "true"` to your pod specifications or you need to add nothing at all
+to inject your pods with a cloud-sql-proxy sidecar.
 
 ### Command line arguments
 
@@ -14,6 +31,8 @@ so your services can easily connect to your cloud sql instance
 | instance | none      | Name of the default cloud sql instance if not specified via annotation | no |
 | secret | none | Name of a secret containing the GCP credentials for this cloud-sql-proxy | no |
 | ca-map | none | Name of a config map containing root certificates | no |
+| annotationRequired | false | Whether to only inject the sidecar if the annotation is present | no |
+| loglevel | info | The log level | no |
 
 ### Annotations
 
