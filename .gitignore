@@ -1,5 +1,5 @@
 cmd/sqlbee/sqlbee
-sqlbee
+/sqlbee
 deployment/sql-secret.yaml
 deployment/ca.crt
 deployment/our-deployment.yaml
