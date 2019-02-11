@@ -303,6 +303,14 @@ func readRequest(w http.ResponseWriter, r *http.Request) (*v1beta1.AdmissionRevi
 		return nil, err
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"remoteAddr": r.RemoteAddr,
+		"requestUri": r.RequestURI,
+		"protocol":   r.Proto,
+		"body":       string(body),
+		"bodyLength": len(body),
+	}).Debug("Received request body")
+
 	ar := v1beta1.AdmissionReview{}
 	if err := json.Unmarshal(body, &ar); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
