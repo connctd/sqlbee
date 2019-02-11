@@ -1,0 +1,19 @@
+deployment:
+  replicaCount: 1
+  name: sqlbee-deployment
+  image: connctd/sqlbee:v0.1.1
+  certSecret: sqlbee-web-certs
+
+service:
+  name: sqlbee-svc
+
+webhook:
+  name: sqlbee-mutating-cfg
+  caBundle: ""
+
+namespace: default
+annotationRequired: true
+cloudSQLCredentials: sqlbee-sql-credentials-secret
+logLevel: info
+default:
+  instance: none

@@ -1,0 +1,52 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployment.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.deployment.replicaCount }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: sqlbee
+    spec:
+      containers:
+      - name: sqlbee
+        image: {{ .Values.deployment.image }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 1
+          periodSeconds: 5
+{{ if .Values.deployment.resources }}
+        resources:
+{{ toYaml .Values.deployment.resources | indent 11 }}
+{{ end }}
+        ports:
+        - containerPort: 443
+        args:
+        {{ if .Values.annotationRequired }}- -annotationRequired{{ end }}
+        - "-cert=/certs/cert.pem"
+        - "-key=/certs/key.pem"
+        {{ if .Values.default.instance }}- "-instance={{ .Values.default.instance }}"{{ end }}
+        - "-secret={{ .Values.cloudSQLCredentials }}"
+        - "-loglevel={{ .Values.logLevel }}"
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: /certs
+          readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: {{ .Values.deployment.certSecret }}

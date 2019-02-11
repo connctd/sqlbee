@@ -1,0 +1,23 @@
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ .Values.webhook.name }}
+  labels:
+    app: sqlbee
+webhooks:
+  - name: {{ .Values.service.name }}.{{ .Values.namespace }}.svc
+    clientConfig:
+      service:
+        name: {{ .Values.service.name }}
+        namespace: {{ .Values.namespace }}
+        path: "/api/v1beta/mutate"
+      caBundle: {{ .Values.webhook.caBundle }}
+    rules:
+      - operations: [ "CREATE" ]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+{{ if .Values.webhook.namespaceSelector }}
+    namespaceSelector:
+{{ toYaml .Values.webhook.namespaceSelector | indent 7 }}
+{{ end }}
