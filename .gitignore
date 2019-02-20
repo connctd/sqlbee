@@ -4,3 +4,4 @@ deployment/sql-secret.yaml
 deployment/ca.crt
 deployment/our-deployment.yaml
 deployment/test-deployment.yaml
+k8s-ca.pem
