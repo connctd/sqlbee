@@ -11,7 +11,7 @@ webhooks:
         name: {{ .Values.service.name }}
         namespace: {{ .Values.namespace }}
         path: "/api/v1beta/mutate"
-      caBundle: {{ if .Values.webhook.caBundle }}{{ .Values.webhook.caBundle }}{{ else }}{{ .Files.Get "k8s-ca.pem" | b64enc }}{{ end }}
+      caBundle: {{ .Values.webhook.caBundle }}
     rules:
       - operations: [ "CREATE" ]
         apiGroups: [""]

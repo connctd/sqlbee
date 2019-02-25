@@ -9,7 +9,7 @@ service:
 
 webhook:
   name: sqlbee-mutating-cfg
-  caBundle: ""
+  caBundle: "[CA_BUNDLE]"
 
 namespace: default
 annotationRequired: true
