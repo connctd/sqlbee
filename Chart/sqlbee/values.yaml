@@ -10,6 +10,12 @@ service:
 webhook:
   name: sqlbee-mutating-cfg
   caBundle: "[CA_BUNDLE]"
+  namespaceSelector:
+    matchExpressions:
+    - key: name
+      operator: NotIn
+      values:
+      - {{ .Release.Namespace }}
 
 namespace: default
 annotationRequired: true

@@ -17,6 +17,7 @@ webhooks:
         apiGroups: [""]
         apiVersions: ["v1"]
         resources: ["pods"]
+    failurePolicy: fail
 {{ if .Values.webhook.namespaceSelector }}
     namespaceSelector:
 {{ toYaml .Values.webhook.namespaceSelector | indent 7 }}
