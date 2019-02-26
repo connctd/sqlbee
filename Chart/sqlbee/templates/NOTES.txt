@@ -1,0 +1,12 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}. If you are using the default `namespaceSelector`
+as provided by this chart, then you probably want to label all namespaces where sqlbee should
+inject cloudSQL proxy sidecars into your pods. This can be done for example like this
+```
+kubectl label namespace default sqlbee-sidecar-injector=enabled
+```
+For the default namespace. Additionally you probably now want to add annotations like
+`sqlbee.connctd.io.inject: true` to your pod specs.
+
+Have an excellent day!
