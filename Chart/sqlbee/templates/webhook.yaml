@@ -4,20 +4,23 @@ metadata:
   name: {{ .Values.webhook.name }}
   labels:
     app: sqlbee
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
 webhooks:
-  - name: {{ .Values.service.name }}.{{ .Values.namespace }}.svc
+  - name: {{ .Values.service.name }}.{{ .Release.Namespace }}.svc
     clientConfig:
       service:
         name: {{ .Values.service.name }}
-        namespace: {{ .Values.namespace }}
+        namespace: {{ .Release.Namespace }}
         path: "/api/v1beta/mutate"
-      caBundle: {{ .Values.webhook.caBundle }}
+      caBundle: "{{ .Values.webhook.caBundle }}"
     rules:
       - operations: [ "CREATE" ]
         apiGroups: [""]
         apiVersions: ["v1"]
         resources: ["pods"]
-    failurePolicy: fail
+    failurePolicy: Fail
 {{ if .Values.webhook.namespaceSelector }}
     namespaceSelector:
 {{ toYaml .Values.webhook.namespaceSelector | indent 7 }}

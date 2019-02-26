@@ -2,7 +2,11 @@ apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   name: {{ .Values.deployment.name }}
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.deployment.replicaCount }}
   strategy:
@@ -13,6 +17,7 @@ spec:
     metadata:
       labels:
         app: sqlbee
+        svc: sqlbee-injector
     spec:
       containers:
       - name: sqlbee
