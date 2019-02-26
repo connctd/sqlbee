@@ -1,20 +1,36 @@
 deployment:
+  # How many copies of sqlbee should run
   replicaCount: 1
+  # The name of the deployment of sqlbee so you can find it in your cluster
   name: sqlbee-deployment
+  # The image of sqlbee. If you have modified sqlbee you want to change this, otherwise leave as is
   image: connctd/sqlbee:v0.1.1
+  # The secret containing the private key and ceritifcate to use for the HTTPS endpoint of sqlbee
   certSecret: sqlbee-injector-certs
 
 service:
+  # The service name under which sqlbee will be reachable within the cluster. If you use the supplied
+  # scripts, leave as is.
   name: sqlbee-svc
 
 webhook:
+  # The name of the mutating webhook configuration. Can be changed freely
   name: sqlbee-mutating-webhook-config
+  # Specify namespace selectors here. By default every name space needs a sqlbee-sidecar-injector=enabled
+  # label to be considered for this webhook. If you change this ensure that kubernetes won't try to mutate
+  # the sqlbee deployment/pods via sqlbee. So leaving this empty will likely not work
   namespaceSelector:
     matchLabels:
       sqlbee-sidecar-injector: enabled
 
+# Whether sqlbee requires a sqlbee annotation to be present to do injection. If this false you can only
+# prevent injections via the namespace selector or by adding the inject annotation set to false
 annotationRequired: true
+# The secret which contains valid cloudSQL credentials. This will be mounted into the cloudSQL proxy
+# sidecar
 cloudSQLCredentials: sqlbee-sql-credentials-secret
+# How much logging do you want to see?
 logLevel: info
-default:
-  instance: none
+# If you want to connect to always connect to the same cloudSQL instance you can specify it here, otherwise
+# you need to specify it in the annotations on the pod
+defaultInstance: null
