@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -122,6 +123,14 @@ func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, po
 			// If a cloud sql proxy already exists, remove it
 			podSpec.Containers = append(podSpec.Containers[:i], podSpec.Containers[i+1:]...)
 			break
+		}
+		container.Resources.Limits = corev1.ResourceList{
+			corev1.ResourceMemory: resource.MustParse("100Mi"),
+			corev1.ResourceCPU:    resource.MustParse("30m"),
+		}
+		container.Resources.Requests = corev1.ResourceList{
+			corev1.ResourceMemory: resource.MustParse("500Mi"),
+			corev1.ResourceCPU:    resource.MustParse("200m"),
 		}
 	}
 	podSpec.Containers = append(podSpec.Containers, *proxyContainer)
