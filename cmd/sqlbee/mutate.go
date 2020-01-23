@@ -124,13 +124,9 @@ func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, po
 			podSpec.Containers = append(podSpec.Containers[:i], podSpec.Containers[i+1:]...)
 			break
 		}
-		container.Resources.Limits = corev1.ResourceList{
+		container.Resources.Requests = corev1.ResourceList{
 			corev1.ResourceMemory: resource.MustParse("100Mi"),
 			corev1.ResourceCPU:    resource.MustParse("30m"),
-		}
-		container.Resources.Requests = corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse("500Mi"),
-			corev1.ResourceCPU:    resource.MustParse("200m"),
 		}
 	}
 	podSpec.Containers = append(podSpec.Containers, *proxyContainer)
