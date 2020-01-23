@@ -115,6 +115,11 @@ type Options struct {
 	KeyFile string
 	// Unused so far. Will be required for support of TLS authenticated clients
 	CaFile string
+
+	// The amount of CPU to be requested
+	cpuRequest string
+	// The amount of memory to be requested
+	memRequest string
 }
 
 // Main is a simple helper method which takes an io.Closer and blocks until either

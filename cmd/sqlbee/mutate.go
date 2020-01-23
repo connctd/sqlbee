@@ -116,7 +116,7 @@ type Options struct {
 }
 
 // mutates a corev1.PodSpec to contain a cloud sql proxy sidecar and the necessary volume mounts and volumes
-func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, podSpec *corev1.PodSpec) corev1.PodSpec {
+func mutatePodSpec(resources corev1.ResourceList, volumes []corev1.Volume, proxyContainer *corev1.Container, podSpec *corev1.PodSpec) corev1.PodSpec {
 
 	for i, container := range podSpec.Containers {
 		if container.Image == proxyContainer.Image || container.Name == proxyContainer.Name {
@@ -124,10 +124,7 @@ func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, po
 			podSpec.Containers = append(podSpec.Containers[:i], podSpec.Containers[i+1:]...)
 			break
 		}
-		container.Resources.Requests = corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse("100Mi"),
-			corev1.ResourceCPU:    resource.MustParse("30m"),
-		}
+		container.Resources.Requests = resources
 	}
 	podSpec.Containers = append(podSpec.Containers, *proxyContainer)
 
@@ -263,8 +260,13 @@ func Mutate(opts Options) sting.MutateFunc {
 		// Configure our copies of the container spec and the volumes based on the annotations
 		// and configuration
 		configureContainerAndVolumes(obj, proxyContainer, &volumes, opts)
-		// mutate the pod with our sidecar and volumes
-		mutatePodSpec(volumes, proxyContainer, podSpec)
+
+		resources := corev1.ResourceList{
+			corev1.ResourceMemory: resource.MustParse(opts.cpuRequest),
+			corev1.ResourceCPU:    resource.MustParse(opts.memRequest),
+		}
+		// mutate the pod with our sidecar, volumes and resources
+		mutatePodSpec(resources, volumes, proxyContainer, podSpec)
 		// create the actual patch
 		patchBytes, err := sting.CreatePatch(obj, raw)
 		if err != nil {
