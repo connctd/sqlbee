@@ -23,11 +23,17 @@ var (
 	annotationInstance = annotationBase + "instance"
 	annotationSecret   = annotationBase + "secret"
 	annotationCaMap    = annotationBase + "caMap"
+	annotationCPURequest = annotationBase + "cpuRequest"
+	annotationMemRequest = annotationBase + "memRequest"
 
 	// default image to be used if none is specified
 	imageName    = "gcr.io/cloudsql-docker/gce-proxy"
 	imageTag     = "1.13"
 	defaultImage = imageName + ":" + imageTag
+
+	// default sidecar resource requests
+	defaultCPURequest = "30m"
+	defaultMemRequest = "50Mi"
 
 	// Command of the sql proxy container. Is extended througout the injection process with additional
 	// parameters depending on the configuration and annotations
@@ -116,7 +122,7 @@ type Options struct {
 }
 
 // mutates a corev1.PodSpec to contain a cloud sql proxy sidecar and the necessary volume mounts and volumes
-func mutatePodSpec(resources corev1.ResourceList, volumes []corev1.Volume, proxyContainer *corev1.Container, podSpec *corev1.PodSpec) corev1.PodSpec {
+func mutatePodSpec(volumes []corev1.Volume, proxyContainer *corev1.Container, podSpec *corev1.PodSpec) corev1.PodSpec {
 
 	for i, container := range podSpec.Containers {
 		if container.Image == proxyContainer.Image || container.Name == proxyContainer.Name {
@@ -124,7 +130,6 @@ func mutatePodSpec(resources corev1.ResourceList, volumes []corev1.Volume, proxy
 			podSpec.Containers = append(podSpec.Containers[:i], podSpec.Containers[i+1:]...)
 			break
 		}
-		container.Resources.Requests = resources
 	}
 	podSpec.Containers = append(podSpec.Containers, *proxyContainer)
 
@@ -141,9 +146,21 @@ func mutatePodSpec(resources corev1.ResourceList, volumes []corev1.Volume, proxy
 // configures the sidecar container spec and the required volumes for the podSpec based on the provided options
 func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.Container, sqlProxyVolumes *[]corev1.Volume, opts Options) {
 	image := sting.AnnotationValue(obj, annotationImage, defaultImage)
+
+	// Retrieve values of resource request from annotations.
+	// Set default values if annotations are empty
+	cpu := sting.AnnotationValue(obj, annotationCPURequest, defaultCPURequest)
+	mem := sting.AnnotationValue(obj, annotationMemRequest, defaultMemRequest)
+
+	sqlProxyContainer.Resources.Requests = corev1.ResourceList{
+		corev1.ResourceMemory: resource.MustParse(mem),
+		corev1.ResourceCPU:    resource.MustParse(cpu),
+	}
+
 	sqlProxyContainer.Image = image
 	cmd := []string{}
 	cmd = append(cmd, sqlProxyCmd...)
+
 
 	instance := sting.AnnotationValue(obj, annotationInstance, opts.DefaultInstance)
 
@@ -223,7 +240,7 @@ func Mutate(opts Options) sting.MutateFunc {
 		podSpec = &pod.Spec
 
 		// Check whether we should do the mutation. If the inject annotation is true
-		// we always inject. If it is false we never muate. If it is missing it depends
+		// we always inject. If it is false we never mutate. If it is missing it depends
 		// whether opts.RequireAnnotation is true or not.
 		if opts.RequireAnnotation && !sting.AnnotationHasValue(obj, annotationInject, "true") {
 			logrus.WithFields(logrus.Fields{
@@ -261,12 +278,8 @@ func Mutate(opts Options) sting.MutateFunc {
 		// and configuration
 		configureContainerAndVolumes(obj, proxyContainer, &volumes, opts)
 
-		resources := corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse(opts.cpuRequest),
-			corev1.ResourceCPU:    resource.MustParse(opts.memRequest),
-		}
 		// mutate the pod with our sidecar, volumes and resources
-		mutatePodSpec(resources, volumes, proxyContainer, podSpec)
+		mutatePodSpec(volumes, proxyContainer, podSpec)
 		// create the actual patch
 		patchBytes, err := sting.CreatePatch(obj, raw)
 		if err != nil {
