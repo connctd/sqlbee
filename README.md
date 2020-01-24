@@ -39,7 +39,11 @@ to inject your pods with a cloud-sql-proxy sidecar.
 | Name | Description | Required |
 | ---- | ----------- | -------- |
 | sqlbee.connctd.io.inject | Wether to inject with a cloud-sql-proxy | no |
-| sqlbee.connctd.io.image | Image to be used | no |
+| sqlbee.connctd.io.image | Image to be used, default gcr.io/cloudsql-docker/gce-proxy:1.13 | no |
 | sqlbee.connctd.io.instance | cloud-sql instance to connect to, required if no default is set | maybe |
 | sqlbee.connctd.io.secret | Secret containing credentials | no |
 | sqlbee.connctd.io.caMap | Config map containing root certificates | no | 
+| sqlbee.connctd.io.cpuRequest | value of the sidecar cpu request, defaults to "30m" | no | 
+| sqlbee.connctd.io.memRequest | value of the sidecar memory request, defaults to "50Mi" | no |
+
+

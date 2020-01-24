@@ -16,8 +16,6 @@ var (
 	caConfigMapName   = flag.String("ca-map", "", "Optional name of a config map containing root certs")
 	requireAnnotation = flag.Bool("annotationRequired", false, "If set, the inject annotation is required to inject the object")
 	logLevel          = flag.String("loglevel", "info", "LogLevel")
-	cpuRequest        = flag.String("cpu", "30m", "The amount of CPU to be requested")
-	memoryRequest     = flag.String("mem", "100Mi", "The amount of memory to be requested")
 )
 
 func main() {
@@ -48,8 +46,6 @@ func main() {
 	mutateOpts.DefaultCertVolume = *caConfigMapName
 	mutateOpts.DefaultSecretName = *secretName
 	mutateOpts.RequireAnnotation = *requireAnnotation
-	mutateOpts.CpuRequest = *cpuRequest
-	mutateOpts.MemRequest = *memoryRequest
 
 	opts.Mutate = Mutate(mutateOpts)
 	opts.CertFile = *certPath
