@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.deployment.name }}
@@ -14,6 +14,15 @@ metadata:
     app.kubernetes.io/version: {{ .Chart.AppVersion }}
 spec:
   replicas: {{ .Values.deployment.replicaCount }}
+  selector:
+    matchLabels:
+      app: sqlbee
+      svc: sqlbee-injector
+      app.kubernetes.io/name: {{ template "sqlbee.name" . }}
+      helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+      app.kubernetes.io/managed-by: {{ .Release.Service }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/version: {{ .Chart.AppVersion }}
   strategy:
     rollingUpdate:
       maxSurge: 1
