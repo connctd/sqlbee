@@ -74,4 +74,4 @@ spec:
       volumes:
         - name: webhook-certs
           secret:
-            secretName: {{ .Values.deployment.certSecret }}
+            secretName: {{ template "sqlbee.name" . }}-certs
