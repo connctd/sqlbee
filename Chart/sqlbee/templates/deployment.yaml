@@ -62,8 +62,8 @@ spec:
         - containerPort: 443
         args:
         {{ if .Values.annotationRequired }}- -annotationRequired{{ end }}
-        - "-cert=/certs/cert.pem"
-        - "-key=/certs/key.pem"
+        - "-cert=/certs/tls.crt"
+        - "-key=/certs/tls.key"
         {{ if .Values.defaultInstance }}- "-instance={{ .Values.defaultInstance }}"{{ end }}
         - "-secret={{ .Values.cloudSQLCredentials }}"
         - "-loglevel={{ .Values.logLevel }}"
