@@ -30,12 +30,14 @@ var (
 
 	// default image to be used if none is specified
 	imageName    = "gcr.io/cloudsql-docker/gce-proxy"
-	imageTag     = "1.13"
+	imageTag     = "1.28.0"
 	defaultImage = imageName + ":" + imageTag
 
 	// default sidecar resource requests
 	defaultCPURequest = "30m"
-	defaultMemRequest = "50Mi"
+	defaultMemRequest = "64Mi"
+	defaultCPULimit   = "1"
+	defaultMemLimit   = "256Mi"
 
 	// Command of the sql proxy container. Is extended througout the injection process with additional
 	// parameters depending on the configuration and annotations
@@ -153,10 +155,16 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 	// Set default values if annotations are empty
 	cpu := sting.AnnotationValue(obj, annotationCPURequest, defaultCPURequest)
 	mem := sting.AnnotationValue(obj, annotationMemRequest, defaultMemRequest)
+	cpuLimit := sting.AnnotationValue(obj, annotationCPULimits, defaultCPULimit)
+	memLimit := sting.AnnotationValue(obj, annotationMemLimits, defaultMemLimit)
 
 	sqlProxyContainer.Resources.Requests = corev1.ResourceList{
 		corev1.ResourceMemory: resource.MustParse(mem),
 		corev1.ResourceCPU:    resource.MustParse(cpu),
+	}
+	sqlProxyContainer.Resources.Limits = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse(cpuLimit),
+		corev1.ResourceMemory: resource.MustParse(memLimit),
 	}
 
 	sqlProxyContainer.Image = image
