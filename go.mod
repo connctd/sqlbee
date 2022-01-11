@@ -31,7 +31,7 @@ require (
 	golang.org/x/sys v0.0.0-20180905080454-ebe1bf3edb33 // indirect
 	golang.org/x/text v0.3.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gopkg.in/yaml.v2 v2.2.2 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog v0.1.0 // indirect
 	k8s.io/utils v0.0.0-20190204185745-a326ccf4f02b // indirect
 	sigs.k8s.io/yaml v1.1.0 // indirect
