@@ -17,14 +17,16 @@ var (
 	podResource = metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 
 	// Annotations which are checked and used to influence the injection
-	annotationBase     = "sqlbee.connctd.io."
-	annotationInject   = annotationBase + "inject"
-	annotationImage    = annotationBase + "image"
-	annotationInstance = annotationBase + "instance"
-	annotationSecret   = annotationBase + "secret"
-	annotationCaMap    = annotationBase + "caMap"
+	annotationBase       = "sqlbee.connctd.io."
+	annotationInject     = annotationBase + "inject"
+	annotationImage      = annotationBase + "image"
+	annotationInstance   = annotationBase + "instance"
+	annotationSecret     = annotationBase + "secret"
+	annotationCaMap      = annotationBase + "caMap"
 	annotationCPURequest = annotationBase + "cpuRequest"
 	annotationMemRequest = annotationBase + "memRequest"
+	annotationCPULimits  = annotationBase + "cpuLimits"
+	annotationMemLimits  = annotationBase + "memLimits"
 
 	// default image to be used if none is specified
 	imageName    = "gcr.io/cloudsql-docker/gce-proxy"
@@ -160,7 +162,6 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 	sqlProxyContainer.Image = image
 	cmd := []string{}
 	cmd = append(cmd, sqlProxyCmd...)
-
 
 	instance := sting.AnnotationValue(obj, annotationInstance, opts.DefaultInstance)
 
