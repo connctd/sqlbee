@@ -6,8 +6,8 @@ VERSION 				?= $(shell git describe --tags --always --dirty)
 RELEASE_VERSION		?= $(shell git describe --abbrev=0)
 LDFLAGS       	?= -X github.com/connctd/sqlbee/pkg/sting.Version=$(VERSION) -w -s
 
-GO_BUILD=$(GO_ENV) GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)"
-GO_TEST=$(GO_ENV) go test -v
+GO_BUILD=$(GO_ENV) GOOS=linux GOARCH=amd64 go build -mod=vendor -ldflags "$(LDFLAGS)"
+GO_TEST=$(GO_ENV) go test -mod=vendor -v
 
 .PHONY: clean test docker
 .DEFAULT_GOAL := build
