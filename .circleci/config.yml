@@ -1,0 +1,80 @@
+version: 2.1
+
+orbs:
+  helm: connctd/helm@1.0.0
+  slack: circleci/slack@3.3.0
+
+jobs:
+  publish-chart:
+    docker:
+      - image: google/cloud-sdk
+    steps:
+      - checkout
+      - run:
+          name: Define chart version based on git tag
+          command: |
+            echo "export CHART_VERSION=$(git describe --tags --always --dirty)" >> $BASH_ENV
+      - helm/init-package-and-publish:
+          service-account-credentials: $GCLOUD_SERVICE_ACCOUNT
+          bucket: $HELM_BUCKET_NAME
+          chart-version: $CHART_VERSION
+      - slack/notify:
+          color: '#1c873c'
+          message: Version ${CHART_VERSION} of ${CIRCLE_PROJECT_REPONAME} chart is available in helm repository
+
+  build-and-test:
+    working_directory: ~/tmp
+    docker:
+      - image: cimg/go:1.17
+    steps:
+      - checkout:
+          path: workspace/repository
+      - run:
+          name: Execute go tests
+          command: |
+            cd ~/tmp/workspace/repository
+            make test
+  build-and-push-image:
+    working_directory: ~/tmp
+    docker:
+      - image: cimg/go:1.17
+    steps:
+      - checkout:
+          path: workspace/repository
+      - setup_remote_docker
+      - run:
+          name: Login to gcloud
+          command: |
+            echo $GCLOUD_SERVICE_ACCOUNT | base64 -d > gcloud-service-key.json
+            docker login -u _json_key -p "$(cat gcloud-service-key.json)" https://eu.gcr.io
+      - run:
+          name: Release image
+          command: |
+            cd ~/tmp/workspace/repository
+            make dist.push
+workflows:
+  version: 2
+  build-test-release:
+    jobs:
+      # always do this - keep in mind: branches are included by default, tags excluded by default
+      - build-and-test:
+          filters:
+            tags:
+              only: /^.*/
+      # always build an image
+      - build-and-push-image:
+          requires:
+            - build-and-test
+          filters:
+            tags:
+              only: /^.*/
+      # only publish prod chart if tag with format v1.2.3 give - ignore branch since it is OR
+      - publish-chart:
+          context: helm
+          requires:
+            - build-and-push-image
+          filters:
+            branches:
+              only: master
+            tags:
+              only: /^v[0-9]{1,}\.[0-9]{1,}\.[0-9]{1,}-rc[0-9]+$/
