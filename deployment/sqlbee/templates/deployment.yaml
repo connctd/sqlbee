@@ -41,7 +41,7 @@ spec:
     spec:
       containers:
       - name: sqlbee
-        image: {{ .Values.deployment.image }}
+        image: "{{ .Values.deployment.repo }}:{{ .Chart.AppVersion }}"
         livenessProbe:
           httpGet:
             path: /health

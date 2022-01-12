@@ -85,4 +85,4 @@ workflows:
             branches:
               only: master
             tags:
-              only: /^v[0-9]{1,}\.[0-9]{1,}\.[0-9]{1,}$/
+              only: /^v[0-9]{1,}\.[0-9]{1,}\.[0-9]{1,}-rc[0-9]+$/
