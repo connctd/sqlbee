@@ -4,7 +4,7 @@ deployment:
   # The name of the deployment of sqlbee so you can find it in your cluster
   name: sqlbee-deployment
   # The image of sqlbee. If you have modified sqlbee you want to change this, otherwise leave as is
-  image: connctd/sqlbee:v0.1.1
+  image: eu.gcr.io/molten-mariner-162315/connctd/sqlbee:v0.3.0-rc1
 
 service:
   # The service name under which sqlbee will be reachable within the cluster. If you use the supplied
