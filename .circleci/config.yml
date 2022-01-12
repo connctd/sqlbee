@@ -68,9 +68,13 @@ workflows:
           filters:
             tags:
               only: /^.*/
+          context:
+          - gcp
       # only publish prod chart if tag with format v1.2.3 give - ignore branch since it is OR
       - publish-chart:
-          context: helm
+          context:
+          - helm
+          - gcp
           requires:
             - build-and-push-image
           filters:
