@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  helm: connctd/helm@1.0.0
+  helm: connctd/helm@1.1
   slack: circleci/slack@3.3.0
 
 jobs:
@@ -14,13 +14,17 @@ jobs:
           name: Define chart version based on git tag
           command: |
             echo "export CHART_VERSION=$(git describe --tags --always --dirty)" >> $BASH_ENV
+            echo "export APP_VERSION=$(git describe --tags --always --dirty)" >> $BASH_ENV
+            source $BASH_ENV
+            echo "Setting Chart Version: $CHART_VERSION"
+            echo "Setting app version: $APP_VERSION"
       - helm/init-package-and-publish:
           service-account-credentials: $GCLOUD_SERVICE_ACCOUNT
           bucket: $HELM_BUCKET_NAME
-          chart-version: $CHART_VERSION
+          app-version: $APP_VERSION
       - slack/notify:
           color: '#1c873c'
-          message: Version ${CHART_VERSION} of ${CIRCLE_PROJECT_REPONAME} chart is available in helm repository
+          message: Version ${CHART_VERSION} of ${CIRCLE_PROJECT_REPONAME}:${APP_VERSION} chart is available in helm repository
 
   build-and-test:
     working_directory: ~/tmp
