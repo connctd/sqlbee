@@ -1,9 +1,9 @@
 BINARY_NAME=sqlbee
 GO_ENV=GO111MODULE=on
-DOCKER_IMAGE=docker.io/connctd/sqlbee
+DOCKER_IMAGE=eu.gcr.io/molten-mariner-162315/connctd/sqlbee
 
-VERSION 				?= $(shell git describe --tags --always --dirty)
-RELEASE_VERSION		?= $(shell git describe --abbrev=0)
+VERSION 		?= $(shell git describe --tags --always --dirty)
+RELEASE_VERSION	?= $(shell git describe --abbrev=0)
 LDFLAGS       	?= -X github.com/connctd/sqlbee/pkg/sting.Version=$(VERSION) -w -s
 
 GO_BUILD=$(GO_ENV) GOOS=linux GOARCH=amd64 go build -mod=vendor -ldflags "$(LDFLAGS)"
@@ -25,3 +25,6 @@ test:
 
 clean:
 	rm -f sqlbee
+
+dist.push: docker
+	docker push $(DOCKER_IMAGE):$(VERSION)
