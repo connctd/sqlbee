@@ -34,8 +34,8 @@ var (
 	defaultImage = imageName + ":" + imageTag
 
 	// default sidecar resource requests
-	defaultCPURequest = "30m"
-	defaultMemRequest = "64Mi"
+	defaultCPURequest = "10m"
+	defaultMemRequest = "32Mi"
 	defaultCPULimit   = "1"
 	defaultMemLimit   = "256Mi"
 
