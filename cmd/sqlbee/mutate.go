@@ -36,8 +36,8 @@ var (
 	// default sidecar resource requests
 	defaultCPURequest = "10m"
 	defaultMemRequest = "32Mi"
-	defaultCPULimit   = "1"
-	defaultMemLimit   = "256Mi"
+	defaultCPULimit   = ""
+	defaultMemLimit   = ""
 
 	// Command of the sql proxy container. Is extended througout the injection process with additional
 	// parameters depending on the configuration and annotations
@@ -162,9 +162,17 @@ func configureContainerAndVolumes(obj runtime.Object, sqlProxyContainer *corev1.
 		corev1.ResourceMemory: resource.MustParse(mem),
 		corev1.ResourceCPU:    resource.MustParse(cpu),
 	}
-	sqlProxyContainer.Resources.Limits = corev1.ResourceList{
-		corev1.ResourceCPU:    resource.MustParse(cpuLimit),
-		corev1.ResourceMemory: resource.MustParse(memLimit),
+
+	if cpuLimit != "" || memLimit != "" {
+		sqlProxyContainer.Resources.Limits = corev1.ResourceList{}
+		if cpuLimit != "" {
+			sqlProxyContainer.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(cpuLimit)
+		}
+		if memLimit != "" {
+			sqlProxyContainer.Resources.Limits[corev1.ResourceMemory] = resource.MustParse(memLimit)
+		}
+	} else {
+		sqlProxyContainer.Resources.Limits = corev1.ResourceList{}
 	}
 
 	sqlProxyContainer.Image = image
