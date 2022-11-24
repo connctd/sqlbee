@@ -30,7 +30,7 @@ var (
 
 	// default image to be used if none is specified
 	imageName    = "gcr.io/cloudsql-docker/gce-proxy"
-	imageTag     = "1.31.2"
+	imageTag     = "1.33.1"
 	defaultImage = imageName + ":" + imageTag
 
 	// default sidecar resource requests
