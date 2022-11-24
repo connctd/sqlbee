@@ -35,7 +35,7 @@ var (
 
 	// default sidecar resource requests
 	defaultCPURequest = "10m"
-	defaultMemRequest = "32Mi"
+	defaultMemRequest = "16Mi"
 	defaultCPULimit   = ""
 	defaultMemLimit   = ""
 
